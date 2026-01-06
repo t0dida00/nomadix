@@ -4,9 +4,12 @@ import { useMergeVisits } from '@/hooks/useTravelData';
 import { getCurrentLocation } from '@/location/locationService';
 import { locationTracker } from '@/location/locationTracker';
 // import { sendVisitBatch } from '@/location/visitApi';
+import {
+    LOCATION_POLL_INTERVAL_MS,
+} from '@/constants/location';
 import { useEffect, useRef } from 'react';
 
-const INTERVAL = 10 * 60 * 1000; // 10 phút
+const INTERVAL = LOCATION_POLL_INTERVAL_MS;
 
 export function useLocationTracking() {
     const timer = useRef<number | null>(null);

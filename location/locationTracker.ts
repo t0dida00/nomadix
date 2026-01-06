@@ -1,5 +1,8 @@
 // location/locationTracker.ts
-
+import {
+    STAY_THRESHOLD_MS,
+    VISIT_BATCH_LIMIT,
+} from '@/constants/location';
 export type PlaceType = 'city' | 'country' | 'continent';
 
 export type LocationSnapshot = {
@@ -21,20 +24,14 @@ export type VisitRecord = {
     visitedAt: number;
 };
 
+
+
 type ActiveStay = {
     [K in PlaceType]?: {
         name: string;
         startedAt: number;
     };
 };
-
-const THRESHOLD: Record<PlaceType, number> = {
-    city: 3 * 60 * 60 * 1000,
-    country: 12 * 60 * 60 * 1000,
-    continent: 24 * 60 * 60 * 1000,
-};
-
-const BATCH_LIMIT = 1;
 
 class LocationTracker {
     private activeStay: ActiveStay = {};
@@ -71,7 +68,7 @@ class LocationTracker {
         }
 
         const duration = now - stay.startedAt;
-        if (duration < THRESHOLD[type]) return;
+        if (duration < STAY_THRESHOLD_MS[type]) return;
 
         const exists = this.visitBatch.some(
             (v) => v.type === type && v[type] === name
@@ -93,7 +90,7 @@ class LocationTracker {
     }
 
     shouldFlush() {
-        return this.visitBatch.length >= BATCH_LIMIT;
+        return this.visitBatch.length >= VISIT_BATCH_LIMIT;
     }
 }
 

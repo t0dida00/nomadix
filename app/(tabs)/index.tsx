@@ -156,8 +156,8 @@ export default function HomeScreen() {
               id="flightLineLayer"
               style={{
                 lineColor: '#4F46E5',
-                lineWidth: 2,
-                lineDasharray: [3, 3],
+                lineWidth: 1,
+                lineDasharray: [1, 1],
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
