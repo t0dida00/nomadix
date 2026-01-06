@@ -21,6 +21,7 @@ export function useLocationTracking() {
             const snapshot = await getCurrentLocation();
             if (!snapshot) return;
             locationTracker.evaluate(snapshot);
+            console.log('Evaluated location snapshot:', locationTracker);
             if (locationTracker.shouldFlush()) {
                 const batch = locationTracker.getBatch();
                 // await sendVisitBatch(batch);

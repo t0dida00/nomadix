@@ -1,3 +1,4 @@
+import { fetchTravelHistoryFromBackend } from '@/apis/travelApi';
 import { VisitRecord } from '@/location/locationTracker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -12,7 +13,8 @@ export interface LocationRecord {
     continent: string;
     latitude: number;
     longitude: number;
-    date: string; // ISO string
+    date: string; // ISO
+    isSynced: boolean;
 }
 
 export interface TravelLeg {
@@ -26,79 +28,7 @@ export interface TravelLeg {
 }
 
 /* ------------------------------------------------------------------ */
-/* Mock data */
-/* ------------------------------------------------------------------ */
-
-const INITIAL_DATA: LocationRecord[] = [
-    {
-        id: '1',
-        city: 'Paris',
-        country: 'France',
-        continent: 'Europe',
-        latitude: 48.8566,
-        longitude: 2.3522,
-        date: '2023-01-15',
-    },
-    {
-        id: '2',
-        city: 'Tokyo',
-        country: 'Japan',
-        continent: 'Asia',
-        latitude: 35.6762,
-        longitude: 139.6503,
-        date: '2023-05-20',
-    },
-    {
-        id: '3',
-        city: 'New York',
-        country: 'USA',
-        continent: 'North America',
-        latitude: 40.7128,
-        longitude: -74.006,
-        date: '2024-01-01',
-    },
-    {
-        id: '4',
-        city: 'Da Lat',
-        country: 'Vietnam',
-        continent: 'Asia',
-        latitude: 11.9404,
-        longitude: 108.4583,
-        date: '2024-03-10',
-    },
-    {
-        id: '5',
-        city: 'Da Nang',
-        country: 'Vietnam',
-        continent: 'Asia',
-        latitude: 16.0544,
-        longitude: 108.2022,
-        date: '2024-03-18',
-    },
-    {
-        id: '6',
-        city: 'Ha Noi',
-        country: 'Vietnam',
-        continent: 'Asia',
-        latitude: 21.0278,
-        longitude: 105.8342,
-        date: '2024-03-25',
-    },
-    {
-        id: '7',
-        city: 'Ho Chi Minh City',
-        country: 'Vietnam',
-        continent: 'Asia',
-        latitude: 10.8231,
-        longitude: 106.6297,
-        date: '2024-04-02',
-    },
-];
-
-const EARTH_CIRCUMFERENCE_KM = 40075;
-
-/* ------------------------------------------------------------------ */
-/* Geo utilities (SINGLE source of truth) */
+/* Geo utils */
 /* ------------------------------------------------------------------ */
 
 function deg2rad(deg: number) {
@@ -125,53 +55,120 @@ export function getDistanceFromLatLonInKm(
 }
 
 /* ------------------------------------------------------------------ */
-/* Queries */
+/* Helpers */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Identity rule:
+ * Same city + country + continent = same place
+ */
+function isSamePlace(
+    a: Pick<LocationRecord, 'city' | 'country' | 'continent'>,
+    b: Pick<LocationRecord, 'city' | 'country' | 'continent'>
+) {
+    return (
+        a.city === b.city &&
+        a.country === b.country &&
+        a.continent === b.continent
+    );
+}
+
+function visitToLocationRecord(
+    visit: VisitRecord
+): LocationRecord {
+    return {
+        id: `${visit.type}-${visit.city}-${visit.visitedAt}`,
+        city: visit.city,
+        country: visit.country,
+        continent: visit.continent,
+        latitude: visit.latitude,
+        longitude: visit.longitude,
+        date: new Date(visit.visitedAt).toISOString(),
+        isSynced: false, // ⭐ frontend only
+    };
+}
+
+/* ------------------------------------------------------------------ */
+/* Query: hydrate from backend */
 /* ------------------------------------------------------------------ */
 
 export function useTravelHistory() {
     return useQuery<LocationRecord[]>({
         queryKey: ['travelHistory'],
         queryFn: async () => {
-            await new Promise((r) => setTimeout(r, 500));
-
-            return [...INITIAL_DATA].sort((a, b) =>
-                a.date.localeCompare(b.date)
-            );
+            const backend = await fetchTravelHistoryFromBackend();
+            return backend.map((b) => ({
+                id: b.id,
+                city: b.city,
+                country: b.country,
+                continent: b.continent,
+                latitude: b.latitude,
+                longitude: b.longitude,
+                date: b.date,
+                isSynced: b.isSynced,
+            }));
         },
         staleTime: Infinity,
     });
 }
 
-export function useAddLocation() {
+/* ------------------------------------------------------------------ */
+/* Merge frontend visits into TanStack */
+/* ------------------------------------------------------------------ */
+
+export function useMergeVisits() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async (newLocation: Omit<LocationRecord, 'id'>) => {
-            await new Promise((r) => setTimeout(r, 500));
-            return {
-                ...newLocation,
-                id: Math.random().toString(36).slice(2, 11),
-            };
-        },
-        onSuccess: (data) => {
+        mutationFn: async (visits: VisitRecord[]) => visits,
+
+        onSuccess: (visits) => {
             queryClient.setQueryData<LocationRecord[]>(
                 ['travelHistory'],
-                (old = []) =>
-                    [...old, data].sort((a, b) =>
+                (old = []) => {
+                    const merged = [...old];
+
+                    visits.forEach((visit) => {
+                        const record =
+                            visitToLocationRecord(visit);
+
+                        const existingIndex =
+                            merged.findIndex((m) =>
+                                isSamePlace(m, record)
+                            );
+
+                        // Backend record exists → DO NOTHING
+                        if (
+                            existingIndex !== -1 &&
+                            merged[existingIndex].isSynced
+                        ) {
+                            return;
+                        }
+
+                        // Unsynced exists → ignore duplicate
+                        if (existingIndex !== -1) {
+                            return;
+                        }
+
+                        merged.push(record);
+                    });
+
+                    return merged.sort((a, b) =>
                         a.date.localeCompare(b.date)
-                    )
+                    );
+                }
             );
         },
     });
 }
 
 /* ------------------------------------------------------------------ */
-/* Derived route data (USED BY MAP & STATS) */
+/* Derived route data */
 /* ------------------------------------------------------------------ */
 
 export function useTravelRoute() {
     const { data: history } = useTravelHistory();
-
+    console.log('data from be:', history);
     if (!history || history.length < 2) {
         return {
             sorted: history ?? [],
@@ -186,28 +183,32 @@ export function useTravelRoute() {
 
     let totalKm = 0;
 
-    const legs: TravelLeg[] = sorted.slice(0, -1).map((from, i) => {
-        const to = sorted[i + 1];
+    const legs: TravelLeg[] = sorted
+        .slice(0, -1)
+        .map((from, i) => {
+            const to = sorted[i + 1];
 
-        const km = getDistanceFromLatLonInKm(
-            from.latitude,
-            from.longitude,
-            to.latitude,
-            to.longitude
-        );
+            const km = getDistanceFromLatLonInKm(
+                from.latitude,
+                from.longitude,
+                to.latitude,
+                to.longitude
+            );
 
-        totalKm += km;
+            totalKm += km;
 
-        return {
-            from,
-            to,
-            km: Math.round(km),
-            midpoint: {
-                latitude: (from.latitude + to.latitude) / 2,
-                longitude: (from.longitude + to.longitude) / 2,
-            },
-        };
-    });
+            return {
+                from,
+                to,
+                km: Math.round(km),
+                midpoint: {
+                    latitude:
+                        (from.latitude + to.latitude) / 2,
+                    longitude:
+                        (from.longitude + to.longitude) / 2,
+                },
+            };
+        });
 
     return {
         sorted,
@@ -217,8 +218,10 @@ export function useTravelRoute() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Stats (REUSES route data) */
+/* Stats */
 /* ------------------------------------------------------------------ */
+
+const EARTH_CIRCUMFERENCE_KM = 40075;
 
 export function useTravelStats() {
     const { sorted, totalKm } = useTravelRoute();
@@ -243,53 +246,38 @@ export function useTravelStats() {
         ).toFixed(2),
     };
 }
-function visitToLocationRecord(
-    visit: VisitRecord
-): LocationRecord {
-    return {
-        id: `${visit.type}-${visit.city}-${visit.visitedAt}`,
-        city: visit.city,
-        country: visit.country,
-        continent: visit.continent,
-        latitude: visit.latitude,
-        longitude: visit.longitude,
-        date: new Date(visit.visitedAt).toISOString(),
-    };
-}
 
-function isDuplicate(
-    history: LocationRecord[],
-    record: LocationRecord
-) {
-    return history.some(
-        (h) =>
-            h.city === record.city &&
-            h.country === record.country &&
-            h.continent === record.continent
-    );
-}
+/* ------------------------------------------------------------------ */
+/* Add location manually (frontend only) */
+/* ------------------------------------------------------------------ */
 
-export function useMergeVisits() {
+export function useAddLocation() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async (visits: VisitRecord[]) => visits,
+        mutationFn: async (
+            newLocation: Omit<LocationRecord, 'id' | 'isSynced'>
+        ) => {
+            // mock create id
+            return {
+                ...newLocation,
+                id: Math.random().toString(36).slice(2, 11),
+                isSynced: false, // ⭐ frontend created
+            } as LocationRecord;
+        },
 
-        onSuccess: (visits) => {
+        onSuccess: (location) => {
             queryClient.setQueryData<LocationRecord[]>(
                 ['travelHistory'],
                 (old = []) => {
-                    const merged = [...old];
+                    // avoid duplicate place
+                    const exists = old.some((l) =>
+                        isSamePlace(l, location)
+                    );
 
-                    visits.forEach((visit) => {
-                        const record = visitToLocationRecord(visit);
+                    if (exists) return old;
 
-                        if (!isDuplicate(merged, record)) {
-                            merged.push(record);
-                        }
-                    });
-
-                    return merged.sort((a, b) =>
+                    return [...old, location].sort((a, b) =>
                         a.date.localeCompare(b.date)
                     );
                 }

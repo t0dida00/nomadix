@@ -125,11 +125,11 @@ export default function HomeScreen() {
         logoEnabled={false}
         attributionEnabled={false}
       >
-        <Mapbox.Images
+        {/* <Mapbox.Images
           images={{
             marker: require('@/assets/images/favicon.png'),
           }}
-        />
+        /> */}
 
         <Mapbox.Camera
           ref={cameraRef}

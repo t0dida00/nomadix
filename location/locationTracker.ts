@@ -1,8 +1,8 @@
-// location/locationTracker.ts
 import {
     STAY_THRESHOLD_MS,
     VISIT_BATCH_LIMIT,
 } from '@/constants/location';
+
 export type PlaceType = 'city' | 'country' | 'continent';
 
 export type LocationSnapshot = {
@@ -22,9 +22,8 @@ export type VisitRecord = {
     latitude: number;
     longitude: number;
     visitedAt: number;
+    isSynced: boolean;
 };
-
-
 
 type ActiveStay = {
     [K in PlaceType]?: {
@@ -41,6 +40,10 @@ class LocationTracker {
         this.checkPlace('city', snapshot.city, snapshot);
         this.checkPlace('country', snapshot.country, snapshot);
         this.checkPlace('continent', snapshot.continent, snapshot);
+    }
+
+    shouldFlush() {
+        return this.visitBatch.length >= VISIT_BATCH_LIMIT;
     }
 
     getBatch() {
@@ -60,10 +63,7 @@ class LocationTracker {
         const now = snapshot.timestamp;
 
         if (!stay || stay.name !== name) {
-            this.activeStay[type] = {
-                name,
-                startedAt: now,
-            };
+            this.activeStay[type] = { name, startedAt: now };
             return;
         }
 
@@ -73,7 +73,6 @@ class LocationTracker {
         const exists = this.visitBatch.some(
             (v) => v.type === type && v[type] === name
         );
-
         if (exists) return;
 
         this.visitBatch.push({
@@ -84,13 +83,10 @@ class LocationTracker {
             latitude: snapshot.latitude,
             longitude: snapshot.longitude,
             visitedAt: stay.startedAt,
+            isSynced: false,
         });
 
         this.activeStay[type] = undefined;
-    }
-
-    shouldFlush() {
-        return this.visitBatch.length >= VISIT_BATCH_LIMIT;
     }
 }
 
