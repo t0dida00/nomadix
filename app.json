@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ddkhoa97.nomadix-frontend",
+      "infoPlist": {
+        "MGLMapboxAccessToken": "sk.eyJ1IjoiZGRraG9hOTciLCJhIjoiY21rMWQ0bXIxMDRnaTNlc2R4bDdsZ2ZvdCJ9.TKhp19ePNqDOgPkChSveRQ"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +23,12 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "package": "com.ddkhoa97.nomadix_frontend"
     },
     "web": {
       "output": "static",
@@ -38,7 +47,28 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsDownloadToken": "sk.eyJ1IjoiZGRraG9hOTciLCJhIjoiY21rMWQ0bXIxMDRnaTNlc2R4bDdsZ2ZvdCJ9.TKhp19ePNqDOgPkChSveRQ"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Show current location on map."
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
